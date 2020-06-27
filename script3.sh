@@ -8,8 +8,8 @@ declare -r ERROR=13
 if [ $UID -ne $ROOT_UID ]
 then
   echo "Vous devez être root pour lancer ce script !"
-  exit $ERROR
-fi  
+  exec sudo bash "$0" "$@"
+fi   
 
 list1=/home/list1
 list2=/home/list2
@@ -49,7 +49,7 @@ then
         if [ ${#lost_rights[*]} -gt 0 ]
         then
             echo ${#lost_rights[*]}
-            echo -e "\nFichiers qui ont perdu leurs droits SUID et/ou GUID :" #à afficher en rouge
+            echo -e "\n\e[91mFichiers qui ont perdu leurs droits SUID et/ou GUID :\e[0m"
             lost_rights=(`comm -23 $list1 $list2`)
             for i in ${lost_rights[@]}
             do
@@ -64,7 +64,7 @@ then
         new_rights=(`comm -13 $list1 $list2`)
         if [ ${#new_rights[*]} -gt 0 ]
         then
-            echo -e "\nFichiers qui ont gagné leurs droits SUID et/ou GUID :" #à afficher en vert
+            echo -e "\n\e[92mFichiers qui ont gagné leurs droits SUID et/ou GUID :\e[0m"
             
             for i in ${new_rights[@]}
             do
