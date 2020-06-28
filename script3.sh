@@ -11,14 +11,16 @@ then
   exec sudo bash "$0" "$@"
 fi   
 
-list1=/home/list1
+# On initialise les variables utiles
+list1=/home/suid_guid_exe
 list2=/home/list2
+zone="."
+format="%i:%a"
 
 # On récupère les exécutables avec une autorisation au moins égale à 2000 ou 4000
-# SGID = perm -2000, SUID = perm -4000, les deux = perm -6000
-# On récupère les fichiers au format "inode:permission:nom"
-# On trie le fichier et stocke le résultat dans un fichier list2
-find / \( -perm -2000 -o -perm -4000 \) -exec stat --format '%i:%n' {} ';' 2> /dev/null | sort -n > $list2
+# On récupère les fichiers au format "inode:permissions(octal):nom"
+# On trie le fichier et stocke le résultat dans un fichir list2
+find $zone \( -perm -2000 -o -perm -4000 \) -exec stat --format $format {} ';' 2> /dev/null | sort -n > $list2
 
 # On vérifie s'il existe déjà un fichier list1 pour comparer les données
 if [ -f $list1 ]
@@ -29,55 +31,100 @@ then
     then
         echo -e "\nLes listes de fichiers sont identiques : aucune modification n'a été réalisée.\n"
     else
-        echo -e "\nIl existe des différences entre les listes de fichiers :"
-        # 6 cas possibles
-            #   - ceux qui ont gagné un droit SUID ou GUID
-            #   - ceux qui n'ont plus aucune droit SUID ou GUID
-            #   - ceux qui étaient SUID et sont devenus SUID  + GUID
-            #   - ceux qui étaient SUID et sont devenus GUID
-            #   - ceux qui étaient GUID et sont devenus SUID  + GUID
-            #   - ceux qui étaient GUID et sont devenus SUID
+        # Si les listes sont différentes : on met les fichiers trouvés dans un tableau
+        tab_list2=(`awk '{print $1}' $list2`)
 
-        # 3 méthodes
-         #diff $list1 $list2 > /home/diff_list
-        # On grep l'ID pourr voir s'il était déjà dans le fichier 1
-        # Si oui : modifié
-        # Si non : apparu
+        # On boucle sur tous les fichiers trouvés
+        for i in "${tab_list2[@]}"
+        do
+            # On récupère les informations utiles
+            id="`echo $i | cut -d: -f1`"
+            rights="`echo $i | cut -d: -f2`"
+                
+            if grep -q "$i:$rights" $list1
+            then
+                # Si l'inode et les droits sont exactement les mêmes que dans la liste 1
+                # Le fichier n'a pas été modifié : on retire la ligne de la liste 1
+                sed -i "/^$id/d" $list1
+            elif grep -q "^$id:" $list1
+            then
+                # Si l'inode est trouvé mais que les droits sont différents
+                # On récupère le(s) nom(s) de fichier(s) associé(s) à l'inode et la date de dernière modification
+                # On stocke le résultat dans une chaîne de caractères
+                names=(`find $zone -inum $id`)
+                for name in "${names[@]}"
+                do
+                    date="`date -r $name`"
+                    updated_files="$updated_files$name -> Dernière modification : $date\n"
+                done
+                # On retire la ligne de la liste 1
+                sed -i "/^$id:/d" $list1
+            else
+                # Si l'inode n'a pas été trouvé dans la liste 1 :
+                # Le fichier a gagné un droit SUID ou GUID
+                # On récupère le(s) nom(s) de fichier(s) associé(s) à l'inode et la date de dernière modification
+                # On stocke le résultat dans une chaîne de caractères
+                names=(`find $zone -inum $id`)
+                for name in "${names[@]}"
+                do
+                    date="`date -r $name`"
+                    new_files="$new_files$name -> Dernière modification : $date\n"
+                done
+            fi
+        done
 
-        # Fichiers uniquement dans la liste 1
-        lost_rights=(`comm -23 $list1 $list2`)
-        if [ ${#lost_rights[*]} -gt 0 ]
+        # Si la liste initiale n'est pas vide : on récupère la liste des fichiers restant
+        [ -s $file1 ]
+        if [ $? -eq $SUCCESS ] 
         then
-            echo ${#lost_rights[*]}
-            echo -e "\n\e[91mFichiers qui ont perdu leurs droits SUID et/ou GUID :\e[0m"
-            lost_rights=(`comm -23 $list1 $list2`)
-            for i in ${lost_rights[@]}
+            for j in `cat $list1`
             do
-                name="`echo $i | cut -d: -f2`"
-                date="`stat --format %y $name`"
-                str=$name" -> Dernière modification : "$date
-                echo $str
+                id="`echo $j | cut -d: -f1`"
+                names=(`find $zone -inum $id`)
+                for name in "${names[@]}"
+                do
+                    date="`date -r $name`"
+                    deleted_files="$deleted_files$name -> Dernière modification : $date"
+                done
             done
         fi
+        
 
-        # Fichiers uniquement dans la liste 2
-        new_rights=(`comm -13 $list1 $list2`)
-        if [ ${#new_rights[*]} -gt 0 ]
+        # Si la chaîne new_files n'est pas vide : on affiche la liste des fichiers
+        [ -n "$new_files" ]
+        if [ $? -eq $SUCCESS ] 
         then
-            echo -e "\n\e[92mFichiers qui ont gagné leurs droits SUID et/ou GUID :\e[0m"
-            
-            for i in ${new_rights[@]}
-            do
-                name="`echo $i | cut -d: -f2`"
-                date="`stat --format %y $name`"
-                str=$name" -> Dernière modification : "$date
-                echo $str
-            done
+            echo -e "\e[92m Fichiers qui ont gagné un droit SUID et/ou GUID :\e[0m"
+            echo -e $new_files
         fi
-        echo -e "\n"
 
-    fi    
-else 
+        # Si la chaîne updated_files n'est pas vide : on affiche la liste des fichiers
+        [ -n "$updated_files" ]
+        if [ $? -eq $SUCCESS ] 
+        then
+            echo -e "\e[93m Fichiers modifiés :\e[0m"
+            echo -e $updated_files
+        fi
+        
+        # Si la chaîne deleted_files n'est pas vide : on affiche la liste des fichiers
+        [ -n "$deleted_files" ]
+        if [ $? -eq $SUCCESS ] 
+        then
+            echo -e "\e[91m Fichiers qui ont perdu un droit SUID et/ou GUID :\e[0m"
+            echo -e $deleted_files
+        fi
+
+
+        # Les nouvelles données deviennent la liste de référence
+        cp $list2 $list1
+        if [ $? -eq $SUCCESS ] 
+        then    
+            echo -e "\nLa liste de référence a été mise à jour !\n"
+        else
+            echo -e "\nAïe, problème dans la mise à jour de la liste de référence :(\n"
+        fi
+    fi
+else
     # Si le fichier n'existe pas : on le crée à partir des données récupérées
     echo -e "\nIl n'existe pas de liste permettant de comparer les informations."
     echo "Création de la liste de référence en cours..."
@@ -90,5 +137,5 @@ else
     fi
 fi
 
-# Une fois fini : liste 2 devient la liste 1 de référence
-#cp $list2 $list1
+# On supprime le fichier list2
+rm $list2
