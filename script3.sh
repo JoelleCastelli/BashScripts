@@ -84,11 +84,11 @@ then
                 for name in "${names[@]}"
                 do
                     date="`date -r $name`"
-                    deleted_files="$deleted_files$name -> Dernière modification : $date"
+                    deleted_files="$deleted_files$name -> Dernière modification : $date\n"
                 done
             done
         fi
-        
+
 
         # Si la chaîne new_files n'est pas vide : on affiche la liste des fichiers
         [ -n "$new_files" ]
@@ -119,9 +119,9 @@ then
         cp $list2 $list1
         if [ $? -eq $SUCCESS ] 
         then    
-            echo -e "\nLa liste de référence a été mise à jour !\n"
+            echo -e "La liste de référence a été mise à jour !\n"
         else
-            echo -e "\nAïe, problème dans la mise à jour de la liste de référence :(\n"
+            echo -e "Aïe, problème dans la mise à jour de la liste de référence :(\n"
         fi
     fi
 else
