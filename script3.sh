@@ -9,18 +9,20 @@ if [ $UID -ne $ROOT_UID ]
 then
   echo "Vous devez être root pour lancer ce script !"
   exec sudo bash "$0" "$@"
-fi   
+fi
 
-# On initialise les variables utiles
+# On initialise les variables utiles et de mise en forme
 list1=/home/suid_guid_exe
 list2=/home/list2
 zone="."
 format="%i:%a"
+bold=$(tput bold)
+normal=$(tput sgr0)
 
-# On récupère les exécutables avec une autorisation au moins égale à 2000 ou 4000
-# On récupère les fichiers au format "inode:permissions(octal):nom"
-# On trie le fichier et stocke le résultat dans un fichir list2
-find $zone \( -perm -2000 -o -perm -4000 \) -exec stat --format $format {} ';' 2> /dev/null | sort -n > $list2
+# On récupère les exécutables avec une autorisation au moins égale
+# à 2000 ou 4000 au format "inode:permissions(octal)"
+# On trie la liste, retire les doublons et stocke le résultat dans un fichier list2
+find $zone \( -perm -2000 -o -perm -4000 \) -exec stat --format $format {} ';' 2> /dev/null | sort -n -u > $list2
 
 # On vérifie s'il existe déjà un fichier list1 pour comparer les données
 if [ -f $list1 ]
@@ -39,9 +41,9 @@ then
         do
             # On récupère les informations utiles
             id="`echo $i | cut -d: -f1`"
-            rights="`echo $i | cut -d: -f2`"
+            current_rights="`echo $i | cut -d: -f2`"
                 
-            if grep -q "$i:$rights" $list1
+            if grep -q "$i:$current_rights" $list1
             then
                 # Si l'inode et les droits sont exactement les mêmes que dans la liste 1
                 # Le fichier n'a pas été modifié : on retire la ligne de la liste 1
@@ -52,16 +54,18 @@ then
                 # On récupère le(s) nom(s) de fichier(s) associé(s) à l'inode et la date de dernière modification
                 # On stocke le résultat dans une chaîne de caractères
                 names=(`find $zone -inum $id`)
+                file=`grep "^$id:" $list1`
+                previous_rights=`echo $file | cut -d: -f2`
                 for name in "${names[@]}"
                 do
                     date="`date -r $name`"
-                    updated_files="$updated_files$name -> Dernière modification : $date\n"
+                    updated_files="$updated_files$name - Dernière modification : $date\n"
+                    updated_files="$updated_files Droits précédents : $previous_rights -> Droits actuels : $current_rights\n"
                 done
                 # On retire la ligne de la liste 1
                 sed -i "/^$id:/d" $list1
             else
-                # Si l'inode n'a pas été trouvé dans la liste 1 :
-                # Le fichier a gagné un droit SUID ou GUID
+                # Si l'inode n'a pas été trouvé dans la liste 1 : le fichier a gagné un droit SUID ou GUID
                 # On récupère le(s) nom(s) de fichier(s) associé(s) à l'inode et la date de dernière modification
                 # On stocke le résultat dans une chaîne de caractères
                 names=(`find $zone -inum $id`)
@@ -69,6 +73,7 @@ then
                 do
                     date="`date -r $name`"
                     new_files="$new_files$name -> Dernière modification : $date\n"
+                    new_files="$new_files Droits actuels : $current_rights\n"
                 done
             fi
         done
@@ -80,21 +85,23 @@ then
             for j in `cat $list1`
             do
                 id="`echo $j | cut -d: -f1`"
+                previous_rights="`echo $i | cut -d: -f2`"
                 names=(`find $zone -inum $id`)
                 for name in "${names[@]}"
                 do
                     date="`date -r $name`"
+                    current_rights=`stat $name --format "%a"`
                     deleted_files="$deleted_files$name -> Dernière modification : $date\n"
+                    deleted_files="$deleted_files Droits précédents : $previous_rights -> Droits actuels : $current_rights\n"
                 done
             done
         fi
-
 
         # Si la chaîne new_files n'est pas vide : on affiche la liste des fichiers
         [ -n "$new_files" ]
         if [ $? -eq $SUCCESS ] 
         then
-            echo -e "\e[92m Fichiers qui ont gagné un droit SUID et/ou GUID :\e[0m"
+            echo -e "\e[92m\n${bold}Fichiers qui ont gagné un droit SUID et/ou GUID :${normal}\e[0m"
             echo -e $new_files
         fi
 
@@ -102,7 +109,7 @@ then
         [ -n "$updated_files" ]
         if [ $? -eq $SUCCESS ] 
         then
-            echo -e "\e[93m Fichiers modifiés :\e[0m"
+            echo -e "\e[93m\n${bold}Fichiers modifiés :${normal}\e[0m"
             echo -e $updated_files
         fi
         
@@ -110,10 +117,9 @@ then
         [ -n "$deleted_files" ]
         if [ $? -eq $SUCCESS ] 
         then
-            echo -e "\e[91m Fichiers qui ont perdu un droit SUID et/ou GUID :\e[0m"
+            echo -e "\e[91m\n${bold}Fichiers qui ont perdu un droit SUID et/ou GUID :${normal}\e[0m"
             echo -e $deleted_files
         fi
-
 
         # Les nouvelles données deviennent la liste de référence
         cp $list2 $list1
