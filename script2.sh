@@ -27,7 +27,7 @@ do
     human_users+=("`du -sb ${folders[$i]} | cut -f1`:${folders[$i]}:${usernames[$i]}")
 done
 
-# On les classe par ordre décroissant grâce au tri shaker
+# On les classe par ordre décroissant de taille de répertoire personnel grâce au tri shaker
 swapped=$TRUE
 start=0
 end=$((${#human_users[*]} - 2)) # -2 car on compare human_users[i] à human_users[i+1]
@@ -118,9 +118,6 @@ do
     repository=`echo $j | cut -d: -f2`
     filepath=$repository/.bashrc
 
-    # On récupère la taille du répertoire personnel
-    rep_size=`du -sb $repository | cut -f1`
-
     # On vérifie s'il existe déjà une règle sur le fichier
     grep -q "#Alerte : 100 Mo" $filepath
     if [ $? -eq $SUCCESS ] 
@@ -128,12 +125,15 @@ do
         # Si oui, on ne fait rien
         continue
     else
-        # Sinon, on l'écrit dynamiquement dans le fichier
+        # Sinon, on l'écrit dans le fichier
+
+        # On récupère la taille du répertoire personnel
+        rep_size=`du -sb $repository | cut -f1`
         readable_size=`get_readable_size $rep_size`
 
-        # On affiche le commentaire qui identifie la présence de l'alerte
+        # On écrit le commentaire qui identifie la présence de l'alerte
         echo -e "\n#Alerte : 100 Mo" >> $filepath
-        # On récupère les variables utiles, dont la taille mise à jour à chaque ouverture du bashrc
+        # On écrit les variables utiles dynamique : la taille du répertoire est mise à jour à chaque ouverture du bashrc
         echo "repository=$repository" >> $filepath
         echo 'size=`du -sb $repository | cut -f1`' >> $filepath
         # Si la taille du répertoire est supérieure à 104857600 octets (100 Mo), une alerte s'affiche
