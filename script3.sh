@@ -59,8 +59,9 @@ then
                 for name in "${names[@]}"
                 do
                     date="`date -r $name`"
-                    updated_files="$updated_files$name - Dernière modification : $date\n"
-                    updated_files="$updated_files Droits précédents : $previous_rights -> Droits actuels : $current_rights\n"
+                    updated_files="$updated_files$name"
+                    updated_files="$updated_files\nDernière modification : $date"
+                    updated_files="$updated_files\nDroits précédents : $previous_rights - Droits actuels : $current_rights\n"
                 done
                 # On retire la ligne de la liste 1
                 sed -i "/^$id:/d" $list1
@@ -72,8 +73,9 @@ then
                 for name in "${names[@]}"
                 do
                     date="`date -r $name`"
-                    new_files="$new_files$name -> Dernière modification : $date\n"
-                    new_files="$new_files Droits actuels : $current_rights\n"
+                    new_files="$new_files$name"
+                    new_files="$new_files\nDernière modification : $date"
+                    new_files="$new_files\nDroits actuels : $current_rights\n"
                 done
             fi
         done
@@ -82,17 +84,21 @@ then
         [ -s $file1 ]
         if [ $? -eq $SUCCESS ] 
         then
+            # On boucle sur chaque ligne du fichier
             for j in `cat $list1`
             do
+                # On récupère l'inode, les droits précédents et le(s) nom(s) de fichier(s) associé(s) à l'inode
                 id="`echo $j | cut -d: -f1`"
-                previous_rights="`echo $i | cut -d: -f2`"
+                previous_rights="`echo $j | cut -d: -f2`"
                 names=(`find $zone -inum $id`)
                 for name in "${names[@]}"
                 do
+                    # Pour chaque nom de fichier, on stocke les informations dans une chaîne de caractères
                     date="`date -r $name`"
                     current_rights=`stat $name --format "%a"`
-                    deleted_files="$deleted_files$name -> Dernière modification : $date\n"
-                    deleted_files="$deleted_files Droits précédents : $previous_rights -> Droits actuels : $current_rights\n"
+                    deleted_files="$deleted_files$name"
+                    deleted_files="$deleted_files\nDernière modification : $date"
+                    deleted_files="$deleted_files\nDroits précédents : $previous_rights - Droits actuels : $current_rights\n"
                 done
             done
         fi
