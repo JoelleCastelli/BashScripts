@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# On déclare les constantes
 declare -r SUCCESS=0
 declare -r ROOT_UID=0
 declare -r ERROR=13
@@ -8,13 +9,13 @@ declare -r ERROR=13
 if [ $UID -ne $ROOT_UID ]
 then
   echo "Vous devez être root pour lancer ce script !"
-  exec sudo bash "$0" "$@"
+  exit $ERROR
 fi
 
 # On initialise les variables utiles et de mise en forme
 list1=/home/suid_guid_exe
 list2=/home/list2
-zone="."
+zone="/"
 format="%i:%a"
 bold=$(tput bold)
 normal=$(tput sgr0)
@@ -22,7 +23,7 @@ normal=$(tput sgr0)
 # On récupère les exécutables avec une autorisation au moins égale
 # à 2000 ou 4000 au format "inode:permissions(octal)"
 # On trie la liste, retire les doublons et stocke le résultat dans un fichier list2
-find $zone \( -perm -2000 -o -perm -4000 \) -exec stat --format $format {} ';' 2> /dev/null | sort -n -u > $list2
+find $zone -executable \( -perm -2000 -o -perm -4000 \) -exec stat --format $format {} ';' 2> /dev/null | sort -n -u > $list2
 
 # On vérifie s'il existe déjà un fichier list1 pour comparer les données
 if [ -f $list1 ]
@@ -151,3 +152,5 @@ fi
 
 # On supprime le fichier list2
 rm $list2
+
+exit $SUCCESS
